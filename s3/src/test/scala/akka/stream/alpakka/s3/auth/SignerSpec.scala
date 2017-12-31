@@ -25,9 +25,10 @@ class SignerSpec(_system: ActorSystem) extends TestKit(_system) with FlatSpecLik
   val credentials = new AWSStaticCredentialsProvider(
     new BasicAWSCredentials("AKIDEXAMPLE", "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY")
   )
-  val scope = CredentialScope(LocalDate.of(2015, 8, 30), "us-east-1", "iam")
-  val signingKey = SigningKey(credentials, scope)
-
+  
+  def scope(date: LocalDate) = CredentialScope(date, "us-east-1", "iam")
+  def signingKey(dateTime: ZonedDateTime) = SigningKey(credentials, scope(dateTime.toLocalDate))
+  
   val cr = CanonicalRequest(
     "GET",
     "/",
@@ -39,7 +40,7 @@ class SignerSpec(_system: ActorSystem) extends TestKit(_system) with FlatSpecLik
 
   "Signer" should "calculate the string to sign" in {
     val date = LocalDateTime.of(2015, 8, 30, 12, 36, 0).atZone(ZoneOffset.UTC)
-    val stringToSign: String = Signer.stringToSign("AWS4-HMAC-SHA256", signingKey, date, cr)
+    val stringToSign: String = Signer.stringToSign("AWS4-HMAC-SHA256", signingKey(date), date, cr)
     stringToSign should equal(
       "AWS4-HMAC-SHA256\n20150830T123600Z\n20150830/us-east-1/iam/aws4_request\nf536975d06c0309214f805bb90ccff089219ecd68b2577efef23edd43b7e1a59"
     )
@@ -52,9 +53,10 @@ class SignerSpec(_system: ActorSystem) extends TestKit(_system) with FlatSpecLik
         Host("iam.amazonaws.com"),
         RawHeader("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
       )
+    val date = LocalDateTime.of(2015, 8, 30, 12, 36, 0).atZone(ZoneOffset.UTC)
 
     val srFuture =
-      Signer.signedRequest(req, signingKey, LocalDateTime.of(2015, 8, 30, 12, 36, 0).atZone(ZoneOffset.UTC))
+      Signer.signedRequest(req, signingKey(date), date)
     whenReady(srFuture) { signedRequest =>
       signedRequest should equal(
         HttpRequest(HttpMethods.GET)
@@ -72,5 +74,18 @@ class SignerSpec(_system: ActorSystem) extends TestKit(_system) with FlatSpecLik
       )
     }
   }
+  
+    it should "format x-amz-date based on year-of-era instead of week-based-year" in {
+     val req = HttpRequest(HttpMethods.GET)
+       .withUri("https://iam.amazonaws.com/?Action=ListUsers&Version=2010-05-08")
+ 
+     val date = LocalDateTime.of(2017, 12, 31, 12, 36, 0).atZone(ZoneOffset.UTC)
+     val srFuture =
+       Signer.signedRequest(req, signingKey(date), date)
+ 
+     whenReady(srFuture) { signedRequest =>
+       signedRequest.getHeader("x-amz-date").get.value should equal("20171231T123600Z")
+     }
+   }
 
 }
