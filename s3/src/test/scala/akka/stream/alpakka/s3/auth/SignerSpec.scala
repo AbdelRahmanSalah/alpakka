@@ -3,8 +3,7 @@
  */
 
 package akka.stream.alpakka.s3.auth
-
-import java.time.{LocalDate, LocalDateTime, ZoneOffset}
+import java.time.{LocalDate, LocalDateTime, ZoneOffset, ZonedDateTime}
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.{HttpMethods, HttpRequest}
 import akka.http.scaladsl.model.headers.{Host, RawHeader}
